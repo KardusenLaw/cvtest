@@ -93,12 +93,8 @@ def sample_descriptors(keypoints, descriptors, s: int = 8):
 
 
 class SuperPoint(nn.Module):
-    """SuperPoint Convolutional Detector and Descriptor
-
-    SuperPoint: Self-Supervised Interest Point Detection and
-    Description. Daniel DeTone, Tomasz Malisiewicz, and Andrew
-    Rabinovich. In CVPRW, 2019. https://arxiv.org/abs/1712.07629
-
+    """
+    Superpoint网络结构
     """
     default_config = {
         'descriptor_dim': 256,
@@ -144,7 +140,7 @@ class SuperPoint(nn.Module):
 
     def forward(self, data):
         """ Compute keypoints, scores, descriptors for image """
-        # Shared Encoder
+        # Encoder
         x = self.relu(self.conv1a(data['image']))
         x = self.relu(self.conv1b(x))
         x = self.pool(x)
@@ -157,7 +153,7 @@ class SuperPoint(nn.Module):
         x = self.relu(self.conv4a(x))
         x = self.relu(self.conv4b(x))
 
-        # Compute the dense keypoint scores
+        # 计算分数
         cPa = self.relu(self.convPa(x))
         scores = self.convPb(cPa)
         scores = torch.nn.functional.softmax(scores, 1)[:, :-1]
@@ -166,32 +162,31 @@ class SuperPoint(nn.Module):
         scores = scores.permute(0, 1, 3, 2, 4).reshape(b, h*8, w*8)
         scores = simple_nms(scores, self.config['nms_radius'])
 
-        # Extract keypoints
+        # 使用阈值得到特征点
         keypoints = [
             torch.nonzero(s > self.config['keypoint_threshold'])
             for s in scores]
         scores = [s[tuple(k.t())] for s, k in zip(scores, keypoints)]
 
-        # Discard keypoints near the image borders
+        # 图像边界的特征点去除
         keypoints, scores = list(zip(*[
             remove_borders(k, s, self.config['remove_borders'], h*8, w*8)
             for k, s in zip(keypoints, scores)]))
 
-        # Keep the k keypoints with highest score
+        # 保留最高分的k个点
         if self.config['max_keypoints'] >= 0:
             keypoints, scores = list(zip(*[
                 top_k_keypoints(k, s, self.config['max_keypoints'])
                 for k, s in zip(keypoints, scores)]))
 
-        # Convert (h, w) to (x, y)
         keypoints = [torch.flip(k, [1]).float() for k in keypoints]
 
-        # Compute the dense descriptors
+        # 描述符计算
         cDa = self.relu(self.convDa(x))
         descriptors = self.convDb(cDa)
         descriptors = torch.nn.functional.normalize(descriptors, p=2, dim=1)
 
-        # Extract descriptors
+        # 提取描述符
         descriptors = [sample_descriptors(k[None], d[None], 8)[0]
                        for k, d in zip(keypoints, descriptors)]
 

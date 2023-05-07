@@ -175,22 +175,8 @@ def arange_like(x, dim: int):
 
 
 class SuperGlue(nn.Module):
-    """SuperGlue feature matching middle-end
-
-    Given two sets of keypoints and locations, we determine the
-    correspondences by:
-      1. Keypoint Encoding (normalization + visual feature and location fusion)
-      2. Graph Neural Network with multiple self and cross-attention layers
-      3. Final projection layer
-      4. Optimal Transport Layer (a differentiable Hungarian matching algorithm)
-      5. Thresholding matrix based on mutual exclusivity and a match_threshold
-
-    The correspondence ids use -1 to indicate non-matching points.
-
-    Paul-Edouard Sarlin, Daniel DeTone, Tomasz Malisiewicz, and Andrew
-    Rabinovich. SuperGlue: Learning Feature Matching with Graph Neural
-    Networks. In CVPR, 2020. https://arxiv.org/abs/1911.11763
-
+    """
+    SuperGlue 特征匹配
     """
     default_config = {
         'descriptor_dim': 256,
@@ -219,8 +205,7 @@ class SuperGlue(nn.Module):
         self.register_parameter('bin_score', bin_score)
 
         assert os.path.basename(self.config['weights']) in ['superglue_indoor.pth', 'superglue_outdoor.pth']
-        # path = Path(__file__).parent
-        # path = path / 'weights/superglue_{}.pth'.format(self.config['weights'])
+
         self.load_state_dict(torch.load(str(self.config['weights']), map_location=torch.device('cpu')))
         print('Loaded SuperGlue model (\"{}\" weights)'.format(
             os.path.basename(self.config['weights'])))
@@ -239,30 +224,30 @@ class SuperGlue(nn.Module):
                 'matching_scores1': kpts1.new_zeros(shape1),
             }
 
-        # Keypoint normalization.
+        # 归一化
         kpts0 = normalize_keypoints(kpts0, data['image0'].shape)
         kpts1 = normalize_keypoints(kpts1, data['image1'].shape)
 
-        # Keypoint MLP encoder.
+        # 特征编码
         desc0 = desc0 + self.kenc(kpts0, data['scores0'])
         desc1 = desc1 + self.kenc(kpts1, data['scores1'])
 
-        # Multi-layer Transformer network.
+        # 结合了很多自注意力和交叉注意力
         desc0, desc1 = self.gnn(desc0, desc1)
 
-        # Final MLP projection.
+        # 映射到描述符
         mdesc0, mdesc1 = self.final_proj(desc0), self.final_proj(desc1)
 
-        # Compute matching descriptor distance.
+        # 匹配分数
         scores = torch.einsum('bdn,bdm->bnm', mdesc0, mdesc1)
         scores = scores / self.config['descriptor_dim']**.5
 
-        # Run the optimal transport.
+        # sinkhorn算法
         scores = log_optimal_transport(
             scores, self.bin_score,
             iters=self.config['sinkhorn_iterations'])
 
-        # Get the matches with score above "match_threshold".
+        # 使用阈值处理
         max0, max1 = scores[:, :-1, :-1].max(2), scores[:, :-1, :-1].max(1)
         indices0, indices1 = max0.indices, max1.indices
         mutual0 = arange_like(indices0, 1)[None] == indices1.gather(1, indices0)

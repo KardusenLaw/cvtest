@@ -39,31 +39,13 @@ class GMM:
         # K, L 至少为4个
         L = max(L, 4)
         K = L
-        ymean = np.mean(Y)
-        ystd = np.std(Y)
-        # BGR颜色的点
-        # for x in X:
-        #     cv2.circle(self.img1, (int(x[0]),int(x[1])), 1, (255,0,0), 2)
-        # for y in Y:
-        #     cv2.circle(self.img1, (int(y[0]),int(y[1])), 1, (0,0,255), 2)
         
         # 前面几个, 也就是known_corr_num个点是阈值筛选出的点,认为是可靠的
         # π_mn每一行之和为1, 总和显然是M
         π_mn = np.ones((M,N)) / N
         π_mn[self.inliners, :] = (1 - self.τ)/(N - 1)
         π_mn[self.inliners, self.inliners] = self.τ
-        # ic(M)
-        # ic(self.inliners[0])
-        # ic(np.sum(π_mn[self.inliners[0], :]))
-        # ic(np.sum(π_mn))
-        # x = 1/0
-        # known_corr_num = len(self.conf)
-        # for k in range(known_corr_num):
-        #     π_mn[k][k] = self.τ
-        #     for n_N in range(N):
-        #         if(n_N == k):
-        #             continue
-        #         π_mn[k][n_N] = (1 - self.τ)/(N - 1)
+
 
         origY = copy.deepcopy(Y)
         origX = copy.deepcopy(X)
